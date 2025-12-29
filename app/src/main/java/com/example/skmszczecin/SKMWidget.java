@@ -138,7 +138,8 @@ public class SKMWidget extends AppWidgetProvider {
                                     dep.getString("direction"),
                                     minutes,
                                     timeRaw,
-                                    !dep.isNull("time_real")
+                                    !dep.isNull("time_real"),
+                                    stop.id
                             ));
                         }
                     }
@@ -202,21 +203,16 @@ public class SKMWidget extends AppWidgetProvider {
             } catch (Exception e) { return 999; }
             return 999;
         }
-
         @Override
         protected void onPostExecute(List<Departure> departures) {
             RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_layout);
-
-            // Tytuł
             views.setTextViewText(R.id.widgetTitle, groupName != null && !groupName.isEmpty() ? groupName.toUpperCase() : "SKM SZCZECIN");
 
-            // ID wierszy (musi pasować do XML z poprzedniej odpowiedzi)
             int[] rows = {R.id.row1, R.id.row2, R.id.row3, R.id.row4, R.id.row5, R.id.row6, R.id.row7, R.id.row8, R.id.row9, R.id.row10};
             int[] lines = {R.id.l1, R.id.l2, R.id.l3, R.id.l4, R.id.l5, R.id.l6, R.id.l7, R.id.l8, R.id.l9, R.id.l10};
             int[] dirs = {R.id.d1, R.id.d2, R.id.d3, R.id.d4, R.id.d5, R.id.d6, R.id.d7, R.id.d8, R.id.d9, R.id.d10};
             int[] times = {R.id.t1, R.id.t2, R.id.t3, R.id.t4, R.id.t5, R.id.t6, R.id.t7, R.id.t8, R.id.t9, R.id.t10};
 
-            // Reset widoku
             for (int id : rows) views.setViewVisibility(id, View.GONE);
 
             if (departures != null && !departures.isEmpty()) {
@@ -224,29 +220,44 @@ public class SKMWidget extends AppWidgetProvider {
                     Departure d = departures.get(i);
                     views.setViewVisibility(rows[i], View.VISIBLE);
                     views.setTextViewText(lines[i], d.line);
-                    views.setTextViewText(dirs[i], d.direction); // XML utnie za długie
+                    String platform = d.stopId.length() >= 2 ? d.stopId.substring(d.stopId.length() - 2) : d.stopId;
+                    String directionWithPlatform = d.direction + " (" + platform + ")";
 
-                    // Nowa logika czasu
+                    views.setTextViewText(dirs[i], directionWithPlatform);
+
+                    // --- POPRAWIONA LOGIKA CZASU ---
                     String timeDisplay;
-                    String icon = d.isReal ? "📶" : "";
+                    String icon = d.isReal ? "📶 " : ""; // Ikona tylko jeśli dane są LIVE
 
                     if (d.minutes < 15) {
-                        timeDisplay = icon + d.minutes + "m";
+                        // Wyświetlamy np. "📶 13 min"
+                        timeDisplay = icon + d.minutes + " min";
                     } else {
-                        // Wyciągamy HH:mm z pełnej daty/czasu
-                        String cleanTime = d.fullTime;
+                        // Wyświetlamy godzinę np. "📶 15:45"
                         try {
-                            if (cleanTime.contains(" ")) cleanTime = cleanTime.split(" ")[1]; // Ucięcie daty
-                            if (cleanTime.length() >= 5) cleanTime = cleanTime.substring(0, 5); // Ucięcie sekund
-                        } catch(Exception e){}
-                        timeDisplay = icon + cleanTime;
+                            String raw = d.fullTime;
+                            String timeOnly = raw;
+                            // Jeśli API zwraca "2023-12-29 15:45:00", bierzemy to co po spacji
+                            if (raw.contains(" ")) {
+                                timeOnly = raw.split(" ")[1];
+                            }
+                            // Bierzemy tylko HH:mm (pierwsze 5 znaków z godziny)
+                            if (timeOnly.contains(":")) {
+                                String[] tParts = timeOnly.split(":");
+                                timeDisplay = icon + tParts[0] + ":" + tParts[1];
+                            } else {
+                                // Jeśli format jest dziwny, wracamy do minut
+                                timeDisplay = icon + d.minutes + " min";
+                            }
+                        } catch (Exception e) {
+                            timeDisplay = icon + d.minutes + " min";
+                        }
                     }
                     views.setTextViewText(times[i], timeDisplay);
                 }
             } else {
-                // Wyświetl diagnostykę, jeśli brak odjazdów
                 views.setViewVisibility(rows[0], View.VISIBLE);
-                views.setTextViewText(dirs[0], !debugInfo.isEmpty() ? debugInfo : "Brak odjazdów");
+                views.setTextViewText(dirs[0], "Brak odjazdów");
                 views.setTextViewText(lines[0], "");
                 views.setTextViewText(times[0], "");
             }
@@ -265,16 +276,17 @@ public class SKMWidget extends AppWidgetProvider {
     }
 
     private static class Departure {
-        String line, direction, fullTime;
+        String line, direction, fullTime, stopId;
         int minutes;
         boolean isReal;
 
-        Departure(String l, String d, int m, String ft, boolean r) {
+        Departure(String l, String d, int m, String ft, boolean r, String sId) {
             line = l;
             direction = d;
             minutes = m;
             fullTime = ft;
             isReal = r;
+            stopId = sId;
         }
     }
 }

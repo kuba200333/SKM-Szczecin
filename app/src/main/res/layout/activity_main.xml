@@ -1,15 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:padding="16dp"
+    android:background="#121212">
 
-    <EditText android:id="@+id/stopIdInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="ID Przystanku (np. 10221)" android:inputType="number" />
-    <EditText android:id="@+id/stopNameInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Nazwa (np. Turzyn)" />
-    <EditText android:id="@+id/linesInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:hint="Linie po przecinku (np. 7, 9)" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Konfigurator Tablicy"
+        android:textColor="#FFFFFF"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp"/>
 
-    <Button android:id="@+id/saveButton" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="DODAJ PRZYSTANEK" />
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="1. Wybierz przystanek:"
+        android:textColor="#AAAAAA"
+        android:textSize="14sp"/>
 
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Twoje przystanki (przytrzymaj by usunąć):" android:layout_marginTop="10dp" />
-    <ListView android:id="@+id/configListView" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" />
+    <Spinner
+        android:id="@+id/stopSpinner"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:background="@android:drawable/btn_dropdown"
+        android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="2. Nazwa Grupy (np. DOM):"
+        android:textColor="#E91E63"
+        android:textSize="14sp"
+        android:textStyle="bold"/>
+
+    <AutoCompleteTextView
+        android:id="@+id/groupInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Wpisz nazwę grupy..."
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555"
+        android:inputType="textCapCharacters"
+        android:layout_marginBottom="12dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="3. Linie (po przecinku, np. 75, 61):"
+        android:textColor="#AAAAAA"
+        android:textSize="14sp"/>
+
+    <EditText
+        android:id="@+id/linesInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="np. A, B, 75"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555"
+        android:layout_marginBottom="16dp"/>
+
+    <Button
+        android:id="@+id/addButton"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="DODAJ PRZYSTANEK"
+        android:backgroundTint="#28A745"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Skonfigurowane grupy:"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <ListView
+        android:id="@+id/configListView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:divider="#333333"
+        android:dividerHeight="1dp"/>
+
 </LinearLayout>

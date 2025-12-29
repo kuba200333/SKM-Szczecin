@@ -5,112 +5,237 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.Spinner;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.lang.reflect.Type;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
     private List<StopConfig> configList;
-    private ArrayAdapter<String> adapter;
-    private List<String> displayList;
+    private ConfigAdapter adapter;
     private SharedPreferences prefs;
     private Gson gson = new Gson();
+
+    // Lista wszystkich przystanków (pobierana z sieci)
+    private final List<Stop> allStops = new ArrayList<>();
+    private ArrayAdapter<Stop> spinnerAdapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Inicjalizacja Spinnera z "Loading..."
+        allStops.add(new Stop("", "Pobieranie listy przystanków..."));
+
         prefs = getSharedPreferences("SKM_PREFS", Context.MODE_PRIVATE);
-
-        if (!prefs.contains("full_config")) {
-            String initialJson = "[" +
-                    "{\"id\":\"22512\",\"name\":\"Dworzec Główny (Kolumba)\",\"groupName\":\"DWORZEC PKP\",\"lines\":[\"75\"]}," +
-                    "{\"id\":\"22921\",\"name\":\"Dworzec Główny (Owocowa)\",\"groupName\":\"DWORZEC PKP\",\"lines\":[\"61\"]}," +
-                    "{\"id\":\"22813\",\"name\":\"Plac Zawiszy\",\"groupName\":\"DWORZEC PKP\",\"lines\":[\"1\",\"9\"]}," +
-                    "{\"id\":\"20813\",\"name\":\"Osiedle Akademickie\",\"groupName\":\"AKADEMIK\",\"lines\":[\"8\",\"10\"]}," +
-                    "{\"id\":\"21111\",\"name\":\"Szwoleżerów\",\"groupName\":\"AKADEMIK\",\"lines\":[\"61\",\"62\",\"241\",\"243\",\"811\"]}," +
-                    "{\"id\":\"11524\",\"name\":\"Plac Rodła\",\"groupName\":\"GALAXY\",\"lines\":[\"4\",\"10\"]}," +
-                    "{\"id\":\"10721\",\"name\":\"Plac Zwycięstwa\",\"groupName\":\"PLAC ZWYCIĘSTWA\",\"lines\":[\"7\",\"8\",\"10\",\"61\",\"62\"]}," +
-                    "{\"id\":\"30212\",\"name\":\"Żołnierska\",\"groupName\":\"UCZELNIA\",\"lines\":[\"5\",\"7\"]}," +
-                    "{\"id\":\"10221\",\"name\":\"Turzyn\",\"groupName\":\"TURZYN\",\"lines\":[\"7\"]}," +
-                    "{\"id\":\"20423\",\"name\":\"Ku Słońcu\",\"groupName\":\"KU SŁOŃCU\",\"lines\":[\"8\",\"10\"]}" +
-                    "]";
-            prefs.edit().putString("full_config", initialJson).apply();
-        }
-
         loadConfig();
 
-        EditText inputId = findViewById(R.id.stopIdInput);
-        EditText inputName = findViewById(R.id.stopNameInput); // Dodaj to ID do XML
-        EditText inputLines = findViewById(R.id.linesInput);   // Dodaj to ID do XML
-        Button btnAdd = findViewById(R.id.saveButton);
-        ListView listView = findViewById(R.id.configListView); // Dodaj to ID do XML
+        Spinner spinner = findViewById(R.id.stopSpinner);
+        AutoCompleteTextView groupInput = findViewById(R.id.groupInput);
+        EditText linesInput = findViewById(R.id.linesInput);
+        Button btnAdd = findViewById(R.id.addButton);
+        ListView listView = findViewById(R.id.configListView);
 
-        displayList = new ArrayList<>();
-        updateDisplayList();
-        adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, displayList);
+        // Adapter dla listy rozwijanej (Spinner)
+        spinnerAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, allStops);
+        spinnerAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinner.setAdapter(spinnerAdapter);
+
+        // Uruchom pobieranie pełnej listy przystanków z ZDiTM
+        new FetchStopsTask().execute();
+
+        // Podpowiedzi dla grup
+        updateGroupSuggestions(groupInput);
+
+        // Nasz własny adapter listy (ładny wygląd skonfigurowanych grup)
+        adapter = new ConfigAdapter(this, configList);
         listView.setAdapter(adapter);
 
         btnAdd.setOnClickListener(v -> {
-            String id = inputId.getText().toString().trim();
-            String name = inputName.getText().toString().trim(); // To jest nazwa przystanku
-            String linesStr = inputLines.getText().toString().trim();
-
-            if (!id.isEmpty() && !name.isEmpty()) {
-                List<String> lines = Arrays.asList(linesStr.split("\\s*,\\s*"));
-
-                // POPRAWKA TUTAJ:
-                // Zamiast "Główna", używamy zmiennej 'name', którą wpisałeś w aplikacji.
-                // Dzięki temu przystanek trafi do grupy o takiej nazwie, jaką wpiszesz.
-                configList.add(new StopConfig(id, name, name.toUpperCase(), lines));
-
-                saveConfig();
-                updateDisplayList();
-                adapter.notifyDataSetChanged();
-                refreshWidget();
-                Toast.makeText(this, "Dodano do grupy: " + name.toUpperCase(), Toast.LENGTH_SHORT).show();
+            Stop selectedStop = (Stop) spinner.getSelectedItem();
+            // Zabezpieczenie przed dodaniem "Pobieranie..."
+            if (selectedStop == null || selectedStop.id.isEmpty()) {
+                Toast.makeText(this, "Wybierz prawidłowy przystanek!", Toast.LENGTH_SHORT).show();
+                return;
             }
-        });
 
-        // Usuwanie po kliknięciu na liście
-        listView.setOnItemLongClickListener((parent, view, position, id) -> {
-            configList.remove(position);
+            String groupName = groupInput.getText().toString().trim().toUpperCase();
+            String linesStr = linesInput.getText().toString().trim();
+
+            if (groupName.isEmpty()) {
+                Toast.makeText(this, "Wpisz nazwę grupy!", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            List<String> lines = Arrays.asList(linesStr.split("\\s*,\\s*"));
+
+            // Dodajemy nowy wpis
+            configList.add(new StopConfig(selectedStop.id, selectedStop.name, groupName, lines));
+
             saveConfig();
-            updateDisplayList();
             adapter.notifyDataSetChanged();
+            updateGroupSuggestions(groupInput); // Odśwież podpowiedzi grup
             refreshWidget();
-            return true;
+
+            Toast.makeText(this, "Dodano: " + selectedStop.name, Toast.LENGTH_SHORT).show();
+
+            // Opcjonalnie: wyczyść pola po dodaniu
+            linesInput.setText("");
         });
+    }
+
+    // --- Klasa do pobierania listy przystanków z ZDiTM ---
+    private class FetchStopsTask extends AsyncTask<Void, Void, List<Stop>> {
+        @Override
+        protected List<Stop> doInBackground(Void... voids) {
+            List<Stop> fetchedStops = new ArrayList<>();
+            try {
+                // Oficjalne API ZDiTM zwracające wszystkie przystanki
+                URL url = new URL("https://www.zditm.szczecin.pl/api/v1/stops");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(5000);
+
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) sb.append(line);
+                reader.close();
+
+                // Parsowanie JSON
+                JSONObject root = new JSONObject(sb.toString());
+                JSONArray data = root.optJSONArray("data"); // API zazwyczaj zwraca dane w polu "data"
+                if (data == null) data = new JSONArray(sb.toString()); // Fallback jeśli to czysta tablica
+
+                for (int i = 0; i < data.length(); i++) {
+                    JSONObject obj = data.getJSONObject(i);
+                    // "number" to ID używane do zapytań o odjazdy, "name" to nazwa wyświetlana
+                    String number = obj.getString("number");
+                    String name = obj.getString("name");
+                    // Filtrowanie (opcjonalnie): pomijamy te bez numeru
+                    if (number != null && !number.isEmpty()) {
+                        fetchedStops.add(new Stop(number, name));
+                    }
+                }
+                // Sortowanie alfabetyczne
+                Collections.sort(fetchedStops, (s1, s2) -> s1.name.compareToIgnoreCase(s2.name));
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            return fetchedStops;
+        }
+
+        @Override
+        protected void onPostExecute(List<Stop> result) {
+            if (result != null && !result.isEmpty()) {
+                allStops.clear();
+                allStops.addAll(result);
+                spinnerAdapter.notifyDataSetChanged();
+                // Opcjonalnie: Toast po załadowaniu
+                // Toast.makeText(MainActivity.this, "Załadowano przystanki", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(MainActivity.this, "Błąd pobierania listy przystanków", Toast.LENGTH_LONG).show();
+                // Fallback: dodaj kilka podstawowych jeśli pobieranie się nie uda
+                if(allStops.size() <= 1) { // jeśli tylko "Pobieranie..."
+                    allStops.clear();
+                    allStops.add(new Stop("22512", "Dworzec Główny (Kolumba)"));
+                    allStops.add(new Stop("11524", "Plac Rodła"));
+                    // ... (możesz dodać więcej awaryjnych)
+                    spinnerAdapter.notifyDataSetChanged();
+                }
+            }
+        }
+    }
+
+    // --- Reszta klas i metod (Adaptery itp.) ---
+
+    private class ConfigAdapter extends ArrayAdapter<StopConfig> {
+        public ConfigAdapter(Context context, List<StopConfig> list) {
+            super(context, 0, list);
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            if (convertView == null) {
+                convertView = getLayoutInflater().inflate(R.layout.list_item_config, parent, false);
+            }
+            StopConfig item = getItem(position);
+
+            TextView txtGroup = convertView.findViewById(R.id.itemGroup);
+            TextView txtName = convertView.findViewById(R.id.itemName);
+            TextView txtLines = convertView.findViewById(R.id.itemLines);
+            Button btnDelete = convertView.findViewById(R.id.btnDelete);
+
+            txtGroup.setText(item.groupName);
+            txtName.setText(item.name);
+            txtLines.setText("Linie: " + String.join(", ", item.lines));
+
+            btnDelete.setOnClickListener(v -> {
+                configList.remove(position);
+                saveConfig();
+                notifyDataSetChanged();
+                refreshWidget();
+                updateGroupSuggestions(findViewById(R.id.groupInput));
+            });
+
+            return convertView;
+        }
+    }
+
+    private void updateGroupSuggestions(AutoCompleteTextView autoComplete) {
+        List<String> groups = new ArrayList<>();
+        for (StopConfig c : configList) {
+            if (!groups.contains(c.groupName)) groups.add(c.groupName);
+        }
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line, groups);
+        autoComplete.setAdapter(adapter);
+    }
+
+    // Klasa pomocnicza dla Spinnera (ID i Nazwa)
+    private static class Stop {
+        String id, name;
+        Stop(String id, String name) { this.id = id; this.name = name; }
+        // To metoda, której Spinner używa do wyświetlania tekstu na liście
+        @Override
+        public String toString() {
+            if (id.isEmpty()) return name; // Obsługa napisu "Pobieranie..."
+            return name + " [" + id + "]";
+        }
     }
 
     private void loadConfig() {
         String json = prefs.getString("full_config", "[]");
-        Type type = new TypeToken<ArrayList<StopConfig>>() {}.getType();
-        configList = gson.fromJson(json, type);
+        configList = gson.fromJson(json, new TypeToken<ArrayList<StopConfig>>() {}.getType());
+        if (configList == null) configList = new ArrayList<>();
     }
 
     private void saveConfig() {
-        String json = gson.toJson(configList);
-        prefs.edit().putString("full_config", json).apply();
-    }
-
-    private void updateDisplayList() {
-        displayList.clear();
-        for (StopConfig s : configList) {
-            displayList.add(s.name + " (" + s.id + ") - Linie: " + s.lines);
-        }
+        prefs.edit().putString("full_config", gson.toJson(configList)).apply();
     }
 
     private void refreshWidget() {

@@ -31,9 +31,3 @@ Prosta i lekka aplikacja na Androida oferująca estetyczny widget z odjazdami ko
 4.  Wybierz grupę, którą chcesz wyświetlać na tym widgecie.
 5.  Gotowe! Kliknij w widget, aby odświeżyć dane.
 
-## 📸 Wygląd
-
-*(Tutaj możesz w przyszłości dodać screenshoty widgetu)*
-
----
-Autor: [Twój Nick/Imię]
